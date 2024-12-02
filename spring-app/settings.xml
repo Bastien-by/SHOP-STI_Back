@@ -1,0 +1,10 @@
+<settings>
+     <proxies>
+	<proxy>
+   	    <active>true</active>
+   	    <protocol>http</protocol>
+   	    <host>10.0.0.1</host>
+   	    <port>80</port>
+	</proxy> 
+     </proxies>
+</settings>
