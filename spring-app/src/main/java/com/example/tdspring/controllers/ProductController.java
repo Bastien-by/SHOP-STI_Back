@@ -37,10 +37,11 @@ public class ProductController {
             @RequestParam("size") String size,
             @RequestParam("cmu") String cmu,
             @RequestParam("location") String location,
+            @RequestParam("brand") String brand,
             @RequestParam("picture") String pictureFile
     ) {
         try {
-            log.info("Creating product ...");
+            log.info("Creating a product ...");
             // Créer un objet Product avec les données du formulaire et l'image en base64
             Product product = new Product();
             product.setTitle(title);
@@ -48,6 +49,7 @@ public class ProductController {
             product.setSize(size);
             product.setCmu(cmu);
             product.setLocation(location);
+            product.setBrand(brand);
             product.setPicture(pictureFile);
 
             // Enregistrer le produit dans la base de données
@@ -73,6 +75,7 @@ public class ProductController {
             @RequestParam("size") String size,
             @RequestParam("cmu") String cmu,
             @RequestParam("location") String location,
+            @RequestParam("brand") String brand,
             @RequestParam("picture") String pictureFile
     ) {
         try {
@@ -85,6 +88,7 @@ public class ProductController {
             product.setSize(size);
             product.setCmu(cmu);
             product.setLocation(location);
+            product.setBrand(brand);
             product.setPicture(pictureFile);
 
             // Enregistrer le produit dans la base de données

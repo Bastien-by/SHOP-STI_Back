@@ -54,4 +54,9 @@ public class CheckService {
             throw new DBException("Could not delete check");
         }
     }
+
+    public Integer getCheckByStockId(Long stockId) throws NotFoundException {
+        List<Check> checks = this.checkRepository.findByStockId(stockId);
+        return checks.size();
+    }
 }

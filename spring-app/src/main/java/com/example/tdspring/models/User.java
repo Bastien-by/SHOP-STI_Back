@@ -8,7 +8,7 @@ import lombok.Setter;
 
 import java.util.Date;
 
-@Entity(name = "user")
+@Entity(name = "users")
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
