@@ -12,4 +12,6 @@ import java.util.List;
 public interface HistoryRepository extends JpaRepository<History, Long> {
     List<History> findByType(String type);
     List<History> findByUser(User user);
+    List<Check> findByStockId (Long id);
+
 }

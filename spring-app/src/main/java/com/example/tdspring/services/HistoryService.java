@@ -65,4 +65,9 @@ public class HistoryService {
             throw new DBException("Could not delete history");
         }
     }
+
+    public Integer getHistoryByStockId(Long stockId) throws NotFoundException {
+        List<Check> checks = this.historyRepository.findByStockId(stockId);
+        return checks.size();
+    }
 }

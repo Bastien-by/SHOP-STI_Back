@@ -91,4 +91,14 @@ public class HistoryController {
         }
     }
 
+    @GetMapping("/getHistoryByStockId/{id}")
+    public ResponseEntity<Integer> getHistoryByStockId(@PathVariable Long id) {
+        try {
+            return new ResponseEntity<>(this.HistoryService.getHistoryByStockId(id), HttpStatus.OK);
+        } catch (NotFoundException e) {
+            log.error(e.getMessage());
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+    }
+
 }
