@@ -24,13 +24,10 @@ public class SiemensPlcService {
     @Value("${PLC_PASSWORD}")
     private String plcPassword;
 
-    private String token;
-
     public SiemensPlcService() {
         this.httpClient = createUnsafeOkHttpClient();
     }
 
-    // Client HTTP qui accepte les certificats auto-signés (PLC)
     private OkHttpClient createUnsafeOkHttpClient() {
         try {
             TrustManager[] trustAllCerts = new TrustManager[]{
@@ -55,117 +52,76 @@ public class SiemensPlcService {
         }
     }
 
-    public boolean ping() {
+    public boolean openLocker(int lockerId) {
         try {
-            log.info("=== PING PLC {} ===", plcUrl);
+            log.info("=== LOGIN + OPEN casier {} ===", lockerId);
 
-            String jsonBody = "{\"jsonrpc\":\"2.0\",\"method\":\"Api.Ping\",\"id\":1}";
-
-            RequestBody body = RequestBody.create(
-                    jsonBody,
-                    MediaType.parse("application/json")
-            );
-
-            Request request = new Request.Builder()
-                    .url(plcUrl + "/api/jsonrpc")
-                    .post(body)
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("Accept", "application/json")
-                    .build();
-
-            log.info("Requête Ping body = {}", jsonBody);
-
-            try (Response response = httpClient.newCall(request).execute()) {
-                String responseBody = response.body() != null ? response.body().string() : "null";
-
-                log.info("Ping status = {}", response.code());
-                log.info("Ping body   = {}", responseBody);
-
-                return response.isSuccessful();
-            }
-        } catch (Exception e) {
-            log.error("Ping PLC échoué", e);
-            return false;
-        }
-    }
-
-    public boolean login() {
-        try {
-            log.info("=== LOGIN PLC {} avec user {} ===", plcUrl, plcUser);
-
-            String jsonBody =
+            // 1) LOGIN
+            String loginBody =
                     "{\"jsonrpc\":\"2.0\",\"method\":\"Api.Login\",\"id\":0," +
                             "\"params\":{\"user\":\"" + plcUser + "\",\"password\":\"" + plcPassword + "\"}}";
 
-            RequestBody body = RequestBody.create(jsonBody, MediaType.parse("application/json"));
+            RequestBody loginRequestBody = RequestBody.create(
+                    loginBody,
+                    MediaType.parse("application/json")
+            );
 
-            Request request = new Request.Builder()
+            Request loginRequest = new Request.Builder()
                     .url(plcUrl + "/api/jsonrpc")
-                    .post(body)
+                    .post(loginRequestBody)
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Accept", "application/json")
                     .build();
 
-            log.info("Requête Login body = {}", jsonBody);
+            String token = null;
 
-            try (Response response = httpClient.newCall(request).execute()) {
-                String responseBody = response.body() != null ? response.body().string() : "";
+            try (Response loginResponse = httpClient.newCall(loginRequest).execute()) {
+                String loginResponseBody = loginResponse.body() != null ? loginResponse.body().string() : "";
+                log.info("Login status = {}", loginResponse.code());
+                log.info("Login body   = {}", loginResponseBody);
 
-                log.info("Login status = {}", response.code());
-                log.info("Login body   = {}", responseBody);
-
-                if (response.isSuccessful() && responseBody.contains("\"token\"")) {
-                    int start = responseBody.indexOf("\"token\":\"") + 9;
-                    int end = responseBody.indexOf("\"", start);
-                    this.token = responseBody.substring(start, end);
-                    log.info("Token reçu = {}", token);
-                    return true;
+                if (!loginResponse.isSuccessful() || !loginResponseBody.contains("\"token\"")) {
+                    log.error("Login PLC échoué");
+                    return false;
                 }
-                return false;
-            }
-        } catch (Exception e) {
-            log.error("Login PLC échoué", e);
-            return false;
-        }
-    }
 
-    public String getToken() {
-        return token;
-    }
-
-    public boolean openLocker(int lockerId) {
-        try {
-            if (token == null && !login()) {
-                log.error("Impossible de se logger au PLC, abandon ouverture casier {}", lockerId);
-                return false;
+                int start = loginResponseBody.indexOf("\"token\":\"") + 9;
+                int end = loginResponseBody.indexOf("\"", start);
+                token = loginResponseBody.substring(start, end);
+                log.info("Token reçu = {}", token);
             }
 
-            String jsonBody =
+            // 2) OUVERTURE CASIER
+            String openBody =
                     "{\"jsonrpc\":\"2.0\",\"method\":\"PlcProgram.Write\",\"id\":1," +
-                            "\"params\":{\"var\":\"DB_Casiers.Casier" + lockerId + ".Ouverture\",\"value\":true}}";
+                            "\"params\":{\"var\":\"\\\"Data\\\".Open_Casier_" + lockerId + "\",\"value\":true}}";
 
-            RequestBody body = RequestBody.create(jsonBody, MediaType.parse("application/json"));
+            RequestBody openRequestBody = RequestBody.create(
+                    openBody,
+                    MediaType.parse("application/json")
+            );
 
-            Request request = new Request.Builder()
+            Request openRequest = new Request.Builder()
                     .url(plcUrl + "/api/jsonrpc")
-                    .post(body)
+                    .post(openRequestBody)
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Accept", "application/json")
                     .addHeader("X-Auth-Token", token)
                     .build();
 
-            log.info("Ouverture casier {} body = {}", lockerId, jsonBody);
+            log.info("Ouverture casier {} body = {}", lockerId, openBody);
 
-            try (Response response = httpClient.newCall(request).execute()) {
-                String responseBody = response.body() != null ? response.body().string() : "null";
+            try (Response openResponse = httpClient.newCall(openRequest).execute()) {
+                String openResponseBody = openResponse.body() != null ? openResponse.body().string() : "null";
 
-                log.info("Open status = {}", response.code());
-                log.info("Open body   = {}", responseBody);
+                log.info("Open status = {}", openResponse.code());
+                log.info("Open body   = {}", openResponseBody);
 
-                return response.isSuccessful();
+                return openResponse.isSuccessful();
             }
+
         } catch (Exception e) {
-            log.error("Erreur lors de l'ouverture du casier {}", lockerId, e);
+            log.error("Erreur lors du login + ouverture casier {}", lockerId, e);
             return false;
         }
     }

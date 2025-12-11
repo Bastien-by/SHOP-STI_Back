@@ -46,6 +46,8 @@ public class StockService {
 
         if (stock.getCreationDate() != null) existing.setCreationDate(stock.getCreationDate());
 
+        if (stock.getLockerNumber() != null) existing.setLockerNumber(stock.getLockerNumber());
+
         try {
             Stock stockCreated = this.stockRepository.save(existing);
             return stockCreated;
