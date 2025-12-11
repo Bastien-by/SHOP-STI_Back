@@ -25,5 +25,6 @@ public class Product {
     private String picture;
     @Transient
     private byte[] pictureBase64;
+    private String alitracer;
 
 }

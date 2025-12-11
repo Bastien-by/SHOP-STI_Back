@@ -43,6 +43,7 @@ public class ProductService {
         if (existing.getPicture() == null || existing.getPicture().equals("null")) {
             existing.setPicture(null);
         }
+        existing.setAlitracer(product.getAlitracer());
 
         try {
             Product productCreated = this.productRepository.save(existing);

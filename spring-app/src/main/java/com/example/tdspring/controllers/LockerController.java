@@ -16,7 +16,7 @@ public class LockerController {
 
     @Autowired
     private SiemensPlcService siemensPlcService;
-    
+
 
     // Test 3: Ouvrir un casier
     @PostMapping("/open/{lockerId}")

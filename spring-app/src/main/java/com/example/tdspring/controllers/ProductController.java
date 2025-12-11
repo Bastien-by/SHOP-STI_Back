@@ -38,7 +38,8 @@ public class ProductController {
             @RequestParam("cmu") String cmu,
             @RequestParam("location") String location,
             @RequestParam("brand") String brand,
-            @RequestParam("picture") String pictureFile
+            @RequestParam("picture") String pictureFile,
+            @RequestParam("alitracer") String alitracer
     ) {
         try {
             log.info("Creating a product ...");
@@ -51,6 +52,7 @@ public class ProductController {
             product.setLocation(location);
             product.setBrand(brand);
             product.setPicture(pictureFile);
+            product.setAlitracer(alitracer);
 
             // Enregistrer le produit dans la base de données
             Product savedProduct = this.productService.updateProduct(product);
@@ -76,7 +78,8 @@ public class ProductController {
             @RequestParam("cmu") String cmu,
             @RequestParam("location") String location,
             @RequestParam("brand") String brand,
-            @RequestParam("picture") String pictureFile
+            @RequestParam("picture") String pictureFile,
+            @RequestParam("alitracer") String alitracer
     ) {
         try {
             log.info("Updating product ...");
@@ -90,6 +93,7 @@ public class ProductController {
             product.setLocation(location);
             product.setBrand(brand);
             product.setPicture(pictureFile);
+            product.setAlitracer(alitracer);
 
             // Enregistrer le produit dans la base de données
             Product savedProduct = this.productService.updateProduct(product);
