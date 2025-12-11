@@ -6,8 +6,11 @@ import com.example.tdspring.models.Check;
 import com.example.tdspring.repositories.CheckRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
+import java.io.FileOutputStream;
 import java.util.List;
+import com.itextpdf.text.Document;
+import com.itextpdf.text.Paragraph;
+import com.itextpdf.text.pdf.PdfWriter;
 
 @Service
 @RequiredArgsConstructor

@@ -8,6 +8,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class DBException extends Exception {
-
-    private String message;
+    public DBException(String message) {
+        super(message);
+    }
 }

@@ -67,7 +67,7 @@ public class HistoryService {
     }
 
     public Integer getHistoryByStockId(Long stockId) throws NotFoundException {
-        List<Check> checks = this.historyRepository.findByStockId(stockId);
-        return checks.size();
+        List<History> histories = this.historyRepository.findByStockId(stockId);
+        return histories.size();
     }
 }

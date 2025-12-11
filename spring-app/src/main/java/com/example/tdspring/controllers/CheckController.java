@@ -11,6 +11,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.itextpdf.text.Document;
+import com.itextpdf.text.Paragraph;
+import com.itextpdf.text.pdf.PdfWriter;
 
 import java.util.List;
 
@@ -32,27 +35,34 @@ public class CheckController {
     @PostMapping
     public ResponseEntity<Check> postCheck(@RequestBody Check checkSent) {
         try {
-            log.info("Creating check ...");
+            log.info("Creating check: {}", checkSent);
 
-            if (checkSent.getStock().getId() == null) {
+            if (checkSent.getStock() == null || checkSent.getStock().getId() == null) {
                 throw new NotFoundException("Stock not found");
             }
-            // Set status of stock element
+
+            // Mettre à jour le statut du stock
             Stock stock = checkSent.getStock();
             stock.setStatus(checkSent.getStatus());
             stockService.updateStock(stock);
 
-            return checkSent.getId() == null ?
-                    new ResponseEntity<>(this.checkService.updateCheck(checkSent), HttpStatus.CREATED) :
-                    new ResponseEntity<>(this.checkService.updateCheck(checkSent), HttpStatus.ACCEPTED);
+            // Enregistrer le check (création ou mise à jour)
+            Check savedCheck = this.checkService.updateCheck(checkSent);
+
+            // Retourner le bon code HTTP selon si c'est une création ou une mise à jour
+            HttpStatus responseStatus = (checkSent.getId() == null) ? HttpStatus.CREATED : HttpStatus.ACCEPTED;
+
+            return new ResponseEntity<>(savedCheck, responseStatus);
+
         } catch (DBException e) {
-            log.error(e.getMessage());
+            log.error("Database error while saving check: {}", e.getMessage());
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         } catch (NotFoundException e) {
-            log.error(e.getMessage());
+            log.error("Check creation failed: {}", e.getMessage());
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
     }
+
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Check> deleteCheck(@PathVariable Long id) {
