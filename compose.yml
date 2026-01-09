@@ -6,6 +6,8 @@ services:
     container_name: spring-app
     ports:
       - "${SPRING_PORT}:8000"
+    volumes:
+      - /var/www/OPtiBox/SHOP-STI_Back/pdfs:/var/www/OPtiBox/SHOP-STI_Back/pdfs:z
     environment:
       SPRING_DATASOURCE_URL: "jdbc:mariadb://db:3306/${MYSQL_DATABASE}"
       SPRING_DATASOURCE_USERNAME: "${MYSQL_USER}"

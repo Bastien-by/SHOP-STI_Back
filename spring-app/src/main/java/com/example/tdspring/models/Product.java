@@ -16,7 +16,6 @@ public class Product {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String title;
-    private String type;
     private String size;
     private String cmu;
     private String location; // Référence à distribution ?
@@ -25,6 +24,5 @@ public class Product {
     private String picture;
     @Transient
     private byte[] pictureBase64;
-    private String alitracer;
 
 }

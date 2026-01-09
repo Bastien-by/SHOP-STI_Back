@@ -62,4 +62,9 @@ public class CheckService {
         List<Check> checks = this.checkRepository.findByStockId(stockId);
         return checks.size();
     }
+    // ✅ AJOUTE CETTE MÉTHODE
+    public Check getCheckById(Long id) throws NotFoundException {
+        return checkRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Check not found with id: " + id));
+    }
 }

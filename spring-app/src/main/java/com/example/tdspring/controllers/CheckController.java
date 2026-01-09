@@ -11,9 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import com.itextpdf.text.Document;
-import com.itextpdf.text.Paragraph;
-import com.itextpdf.text.pdf.PdfWriter;
 
 import java.util.List;
 
@@ -29,7 +26,6 @@ public class CheckController {
     @GetMapping
     public ResponseEntity<List<Check>> getChecks() {
         return new ResponseEntity<>(this.checkService.getAllChecks(), HttpStatus.OK);
-
     }
 
     @PostMapping
@@ -63,6 +59,32 @@ public class CheckController {
         }
     }
 
+    // ✅ NOUVEAU : Mettre à jour le filename du PDF d'un check
+    @PatchMapping("/{checkId}/pdf")
+    public ResponseEntity<Check> updatePdfFilename(
+            @PathVariable Long checkId,
+            @RequestParam String filename) {
+        try {
+            log.info("Updating PDF filename for check {}: {}", checkId, filename);
+
+            Check check = this.checkService.getCheckById(checkId);
+            if (check == null) {
+                throw new NotFoundException("Check not found with id: " + checkId);
+            }
+
+            check.setPdfFilename(filename);
+            Check updatedCheck = this.checkService.updateCheck(check);
+
+            return new ResponseEntity<>(updatedCheck, HttpStatus.OK);
+
+        } catch (NotFoundException e) {
+            log.error("Check not found: {}", e.getMessage());
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        } catch (DBException e) {
+            log.error("Database error while updating check: {}", e.getMessage());
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Check> deleteCheck(@PathVariable Long id) {
@@ -87,5 +109,4 @@ public class CheckController {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
     }
-
 }

@@ -33,7 +33,6 @@ public class ProductService {
         }
 
         existing.setTitle(product.getTitle());
-        existing.setType(product.getType());
         existing.setSize(product.getSize());
         existing.setCmu(product.getCmu());
         existing.setLocation(product.getLocation());
@@ -43,7 +42,6 @@ public class ProductService {
         if (existing.getPicture() == null || existing.getPicture().equals("null")) {
             existing.setPicture(null);
         }
-        existing.setAlitracer(product.getAlitracer());
 
         try {
             Product productCreated = this.productRepository.save(existing);

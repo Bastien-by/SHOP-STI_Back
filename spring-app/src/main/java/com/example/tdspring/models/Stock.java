@@ -23,6 +23,8 @@ public class Stock {
     private Boolean available; //true: available, false: not available
     private Integer status; //0: NOK, 1: OK, 2: HS
     private Date creationDate; //date of creation
+    private String alitracer;
+    private String reference;
     private Integer lockerNumber;
 
 

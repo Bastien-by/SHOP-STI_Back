@@ -46,6 +46,10 @@ public class StockService {
 
         if (stock.getCreationDate() != null) existing.setCreationDate(stock.getCreationDate());
 
+        if (stock.getReference() != null) existing.setReference(stock.getReference());
+
+        if (stock.getAlitracer() != null) existing.setAlitracer(stock.getAlitracer());
+
         if (stock.getLockerNumber() != null) existing.setLockerNumber(stock.getLockerNumber());
 
         try {
