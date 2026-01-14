@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.Data;
 
 import java.util.Date;
 
@@ -14,6 +15,7 @@ import java.util.Date;
 @NoArgsConstructor
 @Getter
 @Setter
+@Data
 public class Check implements Action {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
