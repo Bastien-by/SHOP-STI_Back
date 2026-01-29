@@ -18,7 +18,7 @@ public class LockerController {
     private SiemensPlcService siemensPlcService;
 
 
-    // Test 3: Ouvrir un casier
+    // Ouvrir un casier
     @PostMapping("/open/{lockerId}")
     public ResponseEntity<Map<String, Object>> openLocker(@PathVariable int lockerId) {
         Map<String, Object> response = new HashMap<>();
@@ -27,6 +27,22 @@ public class LockerController {
             response.put("success", success);
             response.put("lockerId", lockerId);
             response.put("message", success ? "Casier " + lockerId + " ouvert" : "Échec ouverture casier");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    // Fermer un casier
+    @PostMapping("/close/{lockerId}")
+    public ResponseEntity<Map<String, Object>> closeLocker(@PathVariable int lockerId) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            boolean success = siemensPlcService.closeLocker(lockerId);
+            response.put("success", success);
+            response.put("lockerId", lockerId);
+            response.put("message", success ? "Casier " + lockerId + " fermé" : "Échec fermeture casier");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             response.put("success", false);
