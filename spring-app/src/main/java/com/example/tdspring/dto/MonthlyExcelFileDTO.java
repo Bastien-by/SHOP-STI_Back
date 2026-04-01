@@ -1,4 +1,4 @@
-package com.example.tdspring.dto;  // ← CORRIGER ICI (pas com.ponet.optibox.dto)
+package com.example.tdspring.dto;
 
 import lombok.Data;
 import java.util.Date;

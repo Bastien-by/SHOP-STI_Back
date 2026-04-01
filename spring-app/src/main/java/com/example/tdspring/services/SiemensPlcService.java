@@ -8,7 +8,11 @@ import org.springframework.stereotype.Service;
 import javax.net.ssl.*;
 import java.io.IOException;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @Slf4j
@@ -56,7 +60,7 @@ public class SiemensPlcService {
     }
 
     /* =========================================================
-     *  MÉTHODES PUBLIQUES - CASIERS
+     *  CASIERS — COMMANDES INDIVIDUELLES
      * ========================================================= */
 
     public boolean openLocker(int lockerId) {
@@ -80,7 +84,6 @@ public class SiemensPlcService {
 
             String response = callJsonRpc(openBody, token);
             log.info("Open casier {} response = {}", lockerId, response);
-
             return response != null;
         } catch (Exception e) {
             log.error("Erreur lors de l'ouverture casier {}", lockerId, e);
@@ -109,7 +112,6 @@ public class SiemensPlcService {
 
             String response = callJsonRpc(closeBody, token);
             log.info("Close casier {} response = {}", lockerId, response);
-
             return response != null;
         } catch (Exception e) {
             log.error("Erreur lors de la fermeture casier {}", lockerId, e);
@@ -118,7 +120,143 @@ public class SiemensPlcService {
     }
 
     /* =========================================================
-     *  MÉTHODES PUBLIQUES - SCAN DOUCHETTE
+     *  CASIERS — COMMANDES BATCH (plusieurs casiers, 1 seule requête)
+     * =========================================================
+     *
+     * JSON-RPC 2.0 supporte les "batch requests" : un tableau de requêtes
+     * dans un seul body HTTP. Le S7-1200 répond avec un tableau de résultats
+     * dans le même ordre.
+     *
+     * Exemple body envoyé pour ouvrir les casiers 1, 3 et 7 :
+     * [
+     *   {"jsonrpc":"2.0","method":"PlcProgram.Write","id":1,"params":{"var":"\"Data\".Open_Casier_1","value":true}},
+     *   {"jsonrpc":"2.0","method":"PlcProgram.Write","id":2,"params":{"var":"\"Data\".Open_Casier_3","value":true}},
+     *   {"jsonrpc":"2.0","method":"PlcProgram.Write","id":3,"params":{"var":"\"Data\".Open_Casier_7","value":true}}
+     * ]
+     *
+     * Réponse du PLC :
+     * [
+     *   {"jsonrpc":"2.0","id":1,"result":true},
+     *   {"jsonrpc":"2.0","id":2,"result":true},
+     *   {"jsonrpc":"2.0","id":3,"result":true}
+     * ]
+     */
+
+    /**
+     * Ouvre une liste de casiers en UNE SEULE requête JSON-RPC batch.
+     *
+     * @param lockerIds liste des numéros de casiers à ouvrir
+     * @return liste des IDs effectivement ouverts (réponse PLC sans erreur)
+     */
+    public List<Integer> openLockers(List<Integer> lockerIds) {
+        log.info("=== OPEN BATCH casiers {} ===", lockerIds);
+        return sendBatchLockerCommand(lockerIds, true);
+    }
+
+    /**
+     * Ferme une liste de casiers en UNE SEULE requête JSON-RPC batch.
+     *
+     * @param lockerIds liste des numéros de casiers à fermer
+     * @return liste des IDs effectivement fermés (réponse PLC sans erreur)
+     */
+    public List<Integer> closeLockers(List<Integer> lockerIds) {
+        log.info("=== CLOSE BATCH casiers {} ===", lockerIds);
+        return sendBatchLockerCommand(lockerIds, false);
+    }
+
+    /**
+     * Construit et envoie une requête JSON-RPC batch pour ouvrir ou fermer
+     * une liste de casiers en un seul appel HTTP vers le S7-1200.
+     *
+     * Utilise l'id JSON-RPC (1-based) pour relier chaque réponse au casier
+     * correspondant dans la liste d'entrée (id - 1 = index).
+     */
+    private List<Integer> sendBatchLockerCommand(List<Integer> lockerIds, boolean open) {
+        List<Integer> succeeded = new ArrayList<>();
+
+        if (lockerIds == null || lockerIds.isEmpty()) {
+            return succeeded;
+        }
+
+        try {
+            String token = loginAndGetToken();
+            if (token == null) {
+                log.error("BatchLockerCommand: login échoué");
+                return succeeded;
+            }
+
+            // ── Construction du body batch ────────────────────────────────
+            // Chaque requête individuelle a un "id" = index + 1 pour pouvoir
+            // retrouver le casier correspondant dans le tableau de réponses.
+            StringBuilder batchBody = new StringBuilder("[");
+            for (int i = 0; i < lockerIds.size(); i++) {
+                int lockerId = lockerIds.get(i);
+                if (i > 0) batchBody.append(",");
+                batchBody.append("{")
+                        .append("\"jsonrpc\":\"2.0\",")
+                        .append("\"method\":\"PlcProgram.Write\",")
+                        .append("\"id\":").append(i + 1).append(",")
+                        .append("\"params\":{")
+                        .append("\"var\":\"\\\"Data\\\".Open_Casier_").append(lockerId).append("\",")
+                        .append("\"value\":").append(open)
+                        .append("}}");
+            }
+            batchBody.append("]");
+
+            log.info("Batch {} body = {}", open ? "OPEN" : "CLOSE", batchBody);
+
+            // ── Envoi de la requête batch (un seul appel HTTP) ────────────
+            String response = callJsonRpc(batchBody.toString(), token);
+            log.info("Batch {} response = {}", open ? "OPEN" : "CLOSE", response);
+
+            if (response == null) {
+                log.error("Batch: réponse null du PLC");
+                return succeeded;
+            }
+
+            // ── Parsing de la réponse batch ───────────────────────────────
+            // On cherche chaque objet JSON de la réponse, on extrait son "id"
+            // pour retrouver le casier, et on vérifie l'absence d'erreur.
+            Pattern idPattern = Pattern.compile("\"id\"\\s*:\\s*(\\d+)");
+            // Découpe grossièrement le tableau de réponses en items individuels
+            // (suffisant car chaque item est un objet JSON simple à 1 niveau)
+            String[] items = response
+                    .replaceAll("^\\s*\\[\\s*", "")   // retire le [ initial
+                    .replaceAll("\\s*\\]\\s*$", "")   // retire le ] final
+                    .split("\\},\\s*\\{");             // sépare les objets
+
+            for (String item : items) {
+                Matcher idMatcher = idPattern.matcher(item);
+                boolean hasError  = item.contains("\"error\"");
+                boolean hasResult = item.contains("\"result\"");
+
+                if (idMatcher.find() && hasResult && !hasError) {
+                    int rpcId = Integer.parseInt(idMatcher.group(1));
+                    int index = rpcId - 1;
+                    if (index >= 0 && index < lockerIds.size()) {
+                        int casier = lockerIds.get(index);
+                        succeeded.add(casier);
+                        log.info("✅ Casier {} {} avec succès", casier, open ? "ouvert" : "fermé");
+                    }
+                } else if (idMatcher.find()) {
+                    int rpcId = Integer.parseInt(idMatcher.group(1));
+                    int index = rpcId - 1;
+                    if (index >= 0 && index < lockerIds.size()) {
+                        log.warn("⚠️ Casier {} : erreur PLC dans la réponse batch — item = {}",
+                                lockerIds.get(index), item);
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("Erreur batch {} casiers {}", open ? "open" : "close", lockerIds, e);
+        }
+
+        return succeeded;
+    }
+
+    /* =========================================================
+     *  SCAN DOUCHETTE
      * ========================================================= */
 
     /**
@@ -149,7 +287,6 @@ public class SiemensPlcService {
 
             String decoded = decodeUntilCR(response);
             log.info("ReadScan decoded value = '{}'", decoded);
-
             return decoded;
 
         } catch (Exception e) {
@@ -159,8 +296,8 @@ public class SiemensPlcService {
     }
 
     /**
-     * Efface la variable "Data".Scan en écrivant des bytes à 0
-     * Pour éviter de relire la même valeur au prochain polling
+     * Efface la variable "Data".Scan en écrivant une chaîne vide.
+     * Évite de relire la même valeur au prochain polling.
      */
     public boolean clearScan() {
         log.info("=== CLEAR \"Data\".Scan ===");
@@ -171,20 +308,18 @@ public class SiemensPlcService {
                 return false;
             }
 
-            // Écrit un tableau de 10 bytes à 0 (efface la variable)
             String clearBody = "{"
                     + "\"jsonrpc\":\"2.0\","
                     + "\"method\":\"PlcProgram.Write\","
                     + "\"id\":1,"
                     + "\"params\":{"
                     + "\"var\":\"\\\"Data\\\".Scan\","
-                    + "\"value\":\"\""  // ← String vide simple
+                    + "\"value\":\"\""
                     + "}"
                     + "}";
 
             String response = callJsonRpc(clearBody, token);
             log.info("ClearScan response = {}", response);
-
             return response != null && !response.contains("\"error\"");
 
         } catch (Exception e) {
@@ -193,9 +328,53 @@ public class SiemensPlcService {
         }
     }
 
+    /* =========================================================
+     *  MANAGE ALL
+     * ========================================================= */
+
     /**
-     * Health check : vérifie que le PLC répond correctement
+     * Écrit dans la variable Manage_All (true = ouvrir tout, false = fermer tout)
      */
+    public boolean writeManageAll(boolean openAll) {
+        log.info("=== WRITE Manage_All = {} ===", openAll);
+        try {
+            String token = loginAndGetToken();
+            if (token == null) {
+                log.error("WriteManageAll: login échoué");
+                return false;
+            }
+
+            String writeBody = "{"
+                    + "\"jsonrpc\":\"2.0\","
+                    + "\"method\":\"PlcProgram.Write\","
+                    + "\"id\":1,"
+                    + "\"params\":{"
+                    + "\"var\":\"\\\"Data\\\".Manage_All\","
+                    + "\"value\":" + openAll
+                    + "}"
+                    + "}";
+
+            log.info("Payload Manage_All: {}", writeBody);
+            String response = callJsonRpc(writeBody, token);
+            log.info("WriteManageAll response = {}", response);
+
+            if (response != null && !response.contains("\"error\"")) {
+                log.info("✅ Manage_All = {} écrit avec succès", openAll);
+                return true;
+            } else {
+                log.error("❌ Erreur JSON-RPC Manage_All: {}", response);
+                return false;
+            }
+        } catch (Exception e) {
+            log.error("❌ Erreur writeManageAll = {}", openAll, e);
+            return false;
+        }
+    }
+
+    /* =========================================================
+     *  HEALTH CHECK
+     * ========================================================= */
+
     public boolean healthCheck() {
         log.info("=== HEALTH CHECK PLC ===");
         try {
@@ -205,7 +384,6 @@ public class SiemensPlcService {
                 return false;
             }
 
-            // Tente de lire la variable Scan pour vérifier la connexion
             String readBody = "{"
                     + "\"jsonrpc\":\"2.0\","
                     + "\"method\":\"PlcProgram.Read\","
@@ -222,7 +400,6 @@ public class SiemensPlcService {
                 log.error("HealthCheck: pas de réponse");
                 return false;
             }
-
             if (response.contains("\"error\"")) {
                 log.error("HealthCheck: erreur PLC = {}", response);
                 return false;
@@ -238,45 +415,35 @@ public class SiemensPlcService {
     }
 
     /* =========================================================
-     *  MÉTHODES PRIVÉES - PARSING
+     *  MÉTHODES PRIVÉES — PARSING
      * ========================================================= */
 
     /**
-     * Decode les bytes et s'arrête au premier CR (13)
-     * Skip les 2 premiers bytes (254 = þ, 73 = I)
+     * Décode les bytes de la réponse et s'arrête au premier CR (13).
+     * Skip les 2 premiers bytes de header (254 = þ, 73 = I).
      */
     private String decodeUntilCR(String jsonResponse) {
         try {
             int arrayStart = jsonResponse.indexOf("\"result\":[") + 10;
-            int arrayEnd = jsonResponse.indexOf(']', arrayStart);
+            int arrayEnd   = jsonResponse.indexOf(']', arrayStart);
 
-            if (arrayStart == -1 || arrayEnd == -1) {
+            if (arrayStart == 9 || arrayEnd == -1) {
                 return null;
             }
 
             String[] bytes = jsonResponse.substring(arrayStart, arrayEnd).split(",");
-
             StringBuilder result = new StringBuilder();
             boolean skipHeader = true;
 
             for (String b : bytes) {
                 int val = Integer.parseInt(b.trim());
 
-                // STOP au premier CR (13)
-                if (val == 13) {
-                    break;
-                }
+                if (val == 13) break;
 
-                // Skip les 2 premiers bytes de header (254 = þ, 73 = I)
-                if (skipHeader && (val == 254 || val == 73)) {
-                    continue;
-                }
+                if (skipHeader && (val == 254 || val == 73)) continue;
                 skipHeader = false;
 
-                // Skip les null bytes
-                if (val == 0) {
-                    break;
-                }
+                if (val == 0) break;
 
                 result.append((char) val);
             }
@@ -290,12 +457,9 @@ public class SiemensPlcService {
     }
 
     /* =========================================================
-     *  MÉTHODES PRIVÉES - COMMUNICATION PLC
+     *  MÉTHODES PRIVÉES — COMMUNICATION PLC
      * ========================================================= */
 
-    /**
-     * Effectue un login et retourne le token, ou null en cas d'échec.
-     */
     private String loginAndGetToken() throws IOException {
         String loginBody = "{"
                 + "\"jsonrpc\":\"2.0\","
@@ -326,9 +490,8 @@ public class SiemensPlcService {
                 return null;
             }
 
-            // Extraction simple du token
             int start = responseBody.indexOf("\"token\":\"") + 9;
-            int end = responseBody.indexOf("\"", start);
+            int end   = responseBody.indexOf("\"", start);
             String token = responseBody.substring(start, end);
 
             log.info("Token reçu = {}", token);
@@ -336,10 +499,6 @@ public class SiemensPlcService {
         }
     }
 
-    /**
-     * Envoie une requête JSON-RPC au PLC avec token d'authentification.
-     * Retourne le body en string ou null en cas d'erreur.
-     */
     private String callJsonRpc(String jsonBody, String token) throws IOException {
         RequestBody body = RequestBody.create(jsonBody, JSON);
 

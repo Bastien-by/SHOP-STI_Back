@@ -6,11 +6,8 @@ import com.example.tdspring.models.Check;
 import com.example.tdspring.repositories.CheckRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import java.io.FileOutputStream;
+
 import java.util.List;
-import com.itextpdf.text.Document;
-import com.itextpdf.text.Paragraph;
-import com.itextpdf.text.pdf.PdfWriter;
 
 @Service
 @RequiredArgsConstructor
@@ -22,12 +19,21 @@ public class CheckService {
         return this.checkRepository.findAll();
     }
 
+    /**
+     * Crée ou met à jour un check.
+     *
+     * Champs persistés :
+     *   - stock, date, user, status, comment  (existants)
+     *   - pdfFilename                          (était oublié — corrigé)
+     *   - checkType                            (nouveau : "REGULATORY" | "INDIVIDUAL" | null)
+     */
     public Check updateCheck(Check check) throws DBException, NotFoundException {
         Check existing;
 
         if (check.getId() != null) {
-            existing = this.checkRepository.findById(check.getId()).orElse(null);
-            if (existing == null) throw new NotFoundException("Could not find check with id : " + check.getId());
+            existing = this.checkRepository.findById(check.getId())
+                    .orElseThrow(() -> new NotFoundException(
+                            "Could not find check with id : " + check.getId()));
         } else {
             existing = new Check();
         }
@@ -38,18 +44,25 @@ public class CheckService {
         existing.setStatus(check.getStatus());
         existing.setUser(check.getUser());
 
+        // ✅ pdfFilename : ne pas écraser une valeur existante si le nouveau est null
+        if (check.getPdfFilename() != null) {
+            existing.setPdfFilename(check.getPdfFilename());
+        }
+
+        // ✅ checkType : "REGULATORY" | "INDIVIDUAL" | null (rétrocompat)
+        existing.setCheckType(check.getCheckType());
+
         try {
-            Check checkCreated = this.checkRepository.save(existing);
-            return checkCreated;
+            return this.checkRepository.save(existing);
         } catch (Exception e) {
-            throw new DBException("Could not create check");
+            throw new DBException("Could not save check");
         }
     }
 
     public Check deleteCheck(Long id) throws NotFoundException, DBException {
-        Check existing = this.checkRepository.findById(id).orElse(null);
-        if (existing == null) throw new NotFoundException("Could not find check with id : " + id);
-
+        Check existing = this.checkRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException(
+                        "Could not find check with id : " + id));
         try {
             this.checkRepository.delete(existing);
             return existing;
@@ -58,13 +71,22 @@ public class CheckService {
         }
     }
 
-    public Integer getCheckByStockId(Long stockId) throws NotFoundException {
-        List<Check> checks = this.checkRepository.findByStockId(stockId);
-        return checks.size();
-    }
-    // ✅ AJOUTE CETTE MÉTHODE
     public Check getCheckById(Long id) throws NotFoundException {
         return checkRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Check not found with id: " + id));
+                .orElseThrow(() -> new NotFoundException(
+                        "Check not found with id: " + id));
+    }
+
+    /**
+     * Retourne TOUS les checks d'un stock avec toutes leurs données
+     * (date, checkType, status, comment…).
+     *
+     * ⚠️ Remplace l'ancienne méthode qui ne renvoyait qu'un Integer (le count).
+     *    Le frontend a besoin de la liste complète pour calculer :
+     *      - lastCheckDate           (tous types → affichage dialog)
+     *      - lastRegulatoryCheckDate (REGULATORY only → ratio + couleur + Excel)
+     */
+    public List<Check> getChecksByStockId(Long stockId) {
+        return this.checkRepository.findByStockId(stockId);
     }
 }

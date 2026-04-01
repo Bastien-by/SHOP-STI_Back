@@ -13,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/checks")
@@ -37,16 +39,17 @@ public class CheckController {
                 throw new NotFoundException("Stock not found");
             }
 
-            // Mettre à jour le statut du stock
+            // Met à jour le statut du stock
             Stock stock = checkSent.getStock();
             stock.setStatus(checkSent.getStatus());
             stockService.updateStock(stock);
 
-            // Enregistrer le check (création ou mise à jour)
+            // Enregistre le check (checkType + pdfFilename inclus)
             Check savedCheck = this.checkService.updateCheck(checkSent);
 
-            // Retourner le bon code HTTP selon si c'est une création ou une mise à jour
-            HttpStatus responseStatus = (checkSent.getId() == null) ? HttpStatus.CREATED : HttpStatus.ACCEPTED;
+            HttpStatus responseStatus = (checkSent.getId() == null)
+                    ? HttpStatus.CREATED
+                    : HttpStatus.ACCEPTED;
 
             return new ResponseEntity<>(savedCheck, responseStatus);
 
@@ -59,7 +62,10 @@ public class CheckController {
         }
     }
 
-    // ✅ NOUVEAU : Mettre à jour le filename du PDF d'un check
+    /**
+     * Met à jour le filename PDF d'un check existant.
+     * Appelé par le frontend après la génération du PDF.
+     */
     @PatchMapping("/{checkId}/pdf")
     public ResponseEntity<Check> updatePdfFilename(
             @PathVariable Long checkId,
@@ -68,10 +74,6 @@ public class CheckController {
             log.info("Updating PDF filename for check {}: {}", checkId, filename);
 
             Check check = this.checkService.getCheckById(checkId);
-            if (check == null) {
-                throw new NotFoundException("Check not found with id: " + checkId);
-            }
-
             check.setPdfFilename(filename);
             Check updatedCheck = this.checkService.updateCheck(check);
 
@@ -89,7 +91,7 @@ public class CheckController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Check> deleteCheck(@PathVariable Long id) {
         try {
-            log.info("Deleting check ...");
+            log.info("Deleting check {}", id);
             return new ResponseEntity<>(this.checkService.deleteCheck(id), HttpStatus.OK);
         } catch (NotFoundException e) {
             log.error(e.getMessage());
@@ -100,13 +102,42 @@ public class CheckController {
         }
     }
 
+    /**
+     * Retourne la LISTE COMPLÈTE des checks d'un stock.
+     *
+     * ⚠️ BREAKING CHANGE : anciennement retournait Integer (count).
+     *    Désormais retourne List<Check> avec date, checkType, status, comment.
+     *
+     * Le frontend l'utilise pour calculer :
+     *   - lastCheckDate           (tous types → affichage)
+     *   - lastRegulatoryCheckDate (checkType = 'REGULATORY' → ratio + couleur + Excel)
+     *
+     * URL : GET /checks/getCheckByStockId/{id}
+     */
     @GetMapping("/getCheckByStockId/{id}")
-    public ResponseEntity<Integer> getCheckByStockId(@PathVariable Long id) {
+    public ResponseEntity<List<Check>> getCheckByStockId(@PathVariable Long id) {
         try {
-            return new ResponseEntity<>(this.checkService.getCheckByStockId(id), HttpStatus.OK);
-        } catch (NotFoundException e) {
+            List<Check> checks = this.checkService.getChecksByStockId(id);
+            return new ResponseEntity<>(checks, HttpStatus.OK);
+        } catch (Exception e) {
             log.error(e.getMessage());
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * Retourne TOUS les checks groupés par stock ID.
+     * Remplace les N appels individuels /getCheckByStockId/{id}
+     * par une seule requête au démarrage.
+     */
+    @GetMapping("/all-by-stocks")
+    public ResponseEntity<Map<Long, List<Check>>> getAllChecksByStocks() {
+        List<Check> all = this.checkService.getAllChecks();
+
+        Map<Long, List<Check>> grouped = all.stream()
+                .filter(c -> c.getStock() != null)
+                .collect(Collectors.groupingBy(c -> c.getStock().getId()));
+
+        return new ResponseEntity<>(grouped, HttpStatus.OK);
     }
 }

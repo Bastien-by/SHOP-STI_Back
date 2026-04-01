@@ -1,0 +1,5 @@
+# Override production : remplace build par image GHCR
+services:
+  spring-app:
+    build: !reset null
+    image: ghcr.io/Bastien-by/optibox-back:latest
