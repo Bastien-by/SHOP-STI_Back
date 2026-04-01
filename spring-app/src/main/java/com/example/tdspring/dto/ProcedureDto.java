@@ -12,10 +12,5 @@ public class ProcedureDto {
     private String description;
     private List<String> steps;
     private List<String> questions;
-    private String warning;
-    private String imagePath;
-    private String imageAlt;
-    private String category;
     private LocalDateTime createdAt;
-    private String createdBy;
 }

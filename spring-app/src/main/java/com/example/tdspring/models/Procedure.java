@@ -2,17 +2,15 @@ package com.example.tdspring.models;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
-@Entity(name = "procedure")
+@Entity
+@Table(name = "procedures")
 @AllArgsConstructor
 @NoArgsConstructor
-@Getter
-@Setter
 @Data
 public class Procedure {
 
@@ -24,21 +22,12 @@ public class Procedure {
     private String subtitle;
 
     @Column(columnDefinition = "TEXT")
-    private String description;
+    private String steps;
 
     @Column(columnDefinition = "TEXT")
-    private String steps;       // JSON : ["étape 1", "étape 2"]
+    private String questions;
 
-    @Column(columnDefinition = "TEXT")
-    private String questions;   // JSON : ["question 1", "question 2"]
-
-    @Column(columnDefinition = "TEXT")
-    private String warning;
-
-    private String imagePath;
-    private String imageAlt;
-    private String category;
-
+    @Column(length = 20971520)
+    private String picture;
     private LocalDateTime createdAt = LocalDateTime.now();
-    private String createdBy;
 }
