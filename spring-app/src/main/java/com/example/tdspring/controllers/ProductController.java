@@ -35,7 +35,6 @@ public class ProductController {
             @RequestParam("title") String title,
             @RequestParam("size") String size,
             @RequestParam("cmu") String cmu,
-            @RequestParam("location") String location,
             @RequestParam("brand") String brand,
             @RequestParam("picture") String pictureFile
     ) {
@@ -46,7 +45,6 @@ public class ProductController {
             product.setTitle(title);
             product.setSize(size);
             product.setCmu(cmu);
-            product.setLocation(location);
             product.setBrand(brand);
             product.setPicture(pictureFile);
 
@@ -71,7 +69,6 @@ public class ProductController {
             @RequestParam("title") String title,
             @RequestParam("size") String size,
             @RequestParam("cmu") String cmu,
-            @RequestParam("location") String location,
             @RequestParam("brand") String brand,
             @RequestParam("picture") String pictureFile
     ) {
@@ -83,7 +80,6 @@ public class ProductController {
             product.setTitle(title);
             product.setSize(size);
             product.setCmu(cmu);
-            product.setLocation(location);
             product.setBrand(brand);
             product.setPicture(pictureFile);
 

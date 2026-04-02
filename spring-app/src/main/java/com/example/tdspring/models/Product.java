@@ -20,7 +20,6 @@ public class Product {
     private String title;
     private String size;
     private String cmu;
-    private String location; // Référence à distribution ?
     private String brand;
     @Column(length = 20971520)
     private String picture;
