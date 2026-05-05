@@ -19,16 +19,24 @@ public class Stock {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     @ManyToOne
     @JoinColumn(name = "id_product")
-    private Product product; // product reference
-    private Boolean available; //true: available, false: not available
-    private Integer status; //0: NOK, 1: OK, 2: HS
-    private Date creationDate; //date of creation
+    private Product product;
+
+    private Boolean available;
+
+    private Integer status; // 0: NOK, 1: OK, 2: HS
+
+    private Date creationDate;
+
     private String alitracer;
+
     private String reference;
+
+    @Column(nullable = true)
     private Integer lockerNumber;
 
-
-
+    @Column(nullable = true)
+    private String emplacement;
 }

@@ -20,15 +20,13 @@ public class ExcelService {
 
     private static final String EXCEL_DIR = "data/monthly-controls/";
     private static final String TEMPLATE_PATH = "templates/Controle_Template.xlsx";
+    private static final TimeZone TZ_PARIS = TimeZone.getTimeZone("Europe/Paris");
 
     @PostConstruct
     public void init() {
         new File(EXCEL_DIR).mkdirs();
     }
 
-    /**
-     * Liste tous les fichiers Excel mensuels
-     */
     public List<MonthlyExcelFileDTO> getMonthlyFiles() {
         File dir = new File(EXCEL_DIR);
         File[] files = dir.listFiles((d, name) -> name.endsWith(".xlsx"));
@@ -48,9 +46,6 @@ public class ExcelService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Compte le nombre d'enregistrements dans un fichier Excel
-     */
     private int getRecordCount(File file) {
         try (FileInputStream fis = new FileInputStream(file);
              Workbook workbook = new XSSFWorkbook(fis)) {
@@ -61,46 +56,38 @@ public class ExcelService {
         }
     }
 
-    /**
-     * Retourne le chemin du fichier mensuel
-     */
     public Path getMonthlyFilePath(String filename) {
         return Paths.get(EXCEL_DIR + filename);
     }
 
-    /**
-     * Met à jour le fichier Excel mensuel avec un nouveau contrôle
-     */
     public void updateMonthlyExcel(CheckRecordDTO checkRecord) {
         String filename = generateFilename(checkRecord.getDate());
         Path filePath = Paths.get(EXCEL_DIR + filename);
 
         try {
-            // Crée le fichier s'il n'existe pas
             if (!Files.exists(filePath)) {
                 createFromTemplate(filePath);
             }
 
-            // Ouvre le fichier et met à jour/ajoute la ligne
             try (FileInputStream fis = new FileInputStream(filePath.toFile());
                  Workbook workbook = new XSSFWorkbook(fis)) {
 
                 Sheet sheet = workbook.getSheetAt(0);
 
-                // Cherche si l'alitracer existe déjà
                 int rowIndex = findRowByAlitracer(sheet, checkRecord.getAlitracer());
 
                 Row row;
                 if (rowIndex == -1) {
-                    // Nouvelle ligne
                     rowIndex = sheet.getLastRowNum() + 1;
                     row = sheet.createRow(rowIndex);
                 } else {
-                    // Mise à jour ligne existante
                     row = sheet.getRow(rowIndex);
                 }
 
-                // Remplit les cellules
+                // Formatter d'affichage avec timezone Paris
+                SimpleDateFormat displayFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+                displayFormat.setTimeZone(TZ_PARIS);
+
                 row.createCell(0).setCellValue(checkRecord.getAlitracer());
                 row.createCell(1).setCellValue(checkRecord.getSize());
                 row.createCell(2).setCellValue(checkRecord.getCmu());
@@ -108,9 +95,8 @@ public class ExcelService {
                 row.createCell(4).setCellValue(getStatusLabel(checkRecord.getStatus()));
                 row.createCell(5).setCellValue(checkRecord.getComment());
                 row.createCell(6).setCellValue(checkRecord.getControlledBy());
-                row.createCell(7).setCellValue(new SimpleDateFormat("dd/MM/yyyy HH:mm").format(checkRecord.getDate()));
+                row.createCell(7).setCellValue(displayFormat.format(checkRecord.getDate()));
 
-                // Sauvegarde
                 try (FileOutputStream fos = new FileOutputStream(filePath.toFile())) {
                     workbook.write(fos);
                 }
@@ -121,9 +107,6 @@ public class ExcelService {
         }
     }
 
-    /**
-     * Cherche une ligne par alitracer
-     */
     private int findRowByAlitracer(Sheet sheet, String alitracer) {
         for (int i = 1; i <= sheet.getLastRowNum(); i++) {
             Row row = sheet.getRow(i);
@@ -136,9 +119,6 @@ public class ExcelService {
         return -1;
     }
 
-    /**
-     * Crée un fichier à partir du template
-     */
     private void createFromTemplate(Path targetPath) throws IOException {
         InputStream templateStream = getClass().getClassLoader().getResourceAsStream(TEMPLATE_PATH);
         if (templateStream == null) {
@@ -148,21 +128,16 @@ public class ExcelService {
         }
     }
 
-    /**
-     * Crée un workbook vide avec headers
-     */
     private void createEmptyWorkbook(Path targetPath) throws IOException {
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Contrôles");
 
-            // Header row
             Row headerRow = sheet.createRow(0);
             String[] headers = {"ID Alitracer", "Taille", "CMU", "Casier", "Statut", "Commentaire", "Contrôleur", "Date"};
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
 
-                // Style du header
                 CellStyle style = workbook.createCellStyle();
                 Font font = workbook.createFont();
                 font.setBold(true);
@@ -170,7 +145,6 @@ public class ExcelService {
                 cell.setCellStyle(style);
             }
 
-            // Auto-size columns
             for (int i = 0; i < headers.length; i++) {
                 sheet.autoSizeColumn(i);
             }
@@ -181,12 +155,13 @@ public class ExcelService {
         }
     }
 
-    /**
-     * Génère le nom de fichier basé sur la date
-     */
     private String generateFilename(Date date) {
         SimpleDateFormat monthFormat = new SimpleDateFormat("MMMM", Locale.FRENCH);
         SimpleDateFormat yearFormat = new SimpleDateFormat("yyyy");
+
+        // Timezone Paris sur les deux formatters pour éviter le décalage UTC
+        monthFormat.setTimeZone(TZ_PARIS);
+        yearFormat.setTimeZone(TZ_PARIS);
 
         String month = capitalize(monthFormat.format(date));
         String year = yearFormat.format(date);

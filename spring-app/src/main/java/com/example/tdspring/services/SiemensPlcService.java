@@ -303,18 +303,17 @@ public class SiemensPlcService {
         log.info("=== CLEAR \"Data\".Scan ===");
         try {
             String token = loginAndGetToken();
-            if (token == null) {
-                log.error("ClearScan: login échoué");
-                return false;
-            }
+            if (token == null) return false;
 
+            // Écrire un espace " " — le S7 accepte une string non-vide
+            // decodeUntilCR ignorera un espace grâce au .trim() final
             String clearBody = "{"
                     + "\"jsonrpc\":\"2.0\","
                     + "\"method\":\"PlcProgram.Write\","
                     + "\"id\":1,"
                     + "\"params\":{"
                     + "\"var\":\"\\\"Data\\\".Scan\","
-                    + "\"value\":\"\""
+                    + "\"value\":\" \""   // ← un espace, pas une string vide
                     + "}"
                     + "}";
 
@@ -433,22 +432,33 @@ public class SiemensPlcService {
 
             String[] bytes = jsonResponse.substring(arrayStart, arrayEnd).split(",");
             StringBuilder result = new StringBuilder();
-            boolean skipHeader = true;
 
-            for (String b : bytes) {
-                int val = Integer.parseInt(b.trim());
+            // Structure d'un STRING Siemens en mode "raw" :
+            // Byte 0 : longueur max déclarée du String (ex: 254 = 0xFE)
+            // Byte 1 : longueur actuelle de la chaîne  (ex: 6 pour "012244")
+            // Byte 2+: les caractères ASCII de la chaîne
+            // → On skip les 2 premiers bytes de metadata, on lit les suivants
 
-                if (val == 13) break;
+            if (bytes.length < 3) return null;
 
-                if (skipHeader && (val == 254 || val == 73)) continue;
-                skipHeader = false;
+            int maxLen    = Integer.parseInt(bytes[0].trim()); // longueur max (ignorée)
+            int actualLen = Integer.parseInt(bytes[1].trim()); // longueur réelle utile
 
-                if (val == 0) break;
+            for (int i = 2; i < bytes.length; i++) {
+                int val = Integer.parseInt(bytes[i].trim());
+
+                if (val == 0 || val == 13) break; // NULL ou CR = fin de chaîne
 
                 result.append((char) val);
             }
 
-            return result.toString().trim();
+            // On tronque à la longueur réelle annoncée par l'automate
+            String decoded = result.toString();
+            if (actualLen > 0 && actualLen < decoded.length()) {
+                decoded = decoded.substring(0, actualLen);
+            }
+
+            return decoded.trim();
 
         } catch (Exception e) {
             log.error("Erreur décodage bytes", e);

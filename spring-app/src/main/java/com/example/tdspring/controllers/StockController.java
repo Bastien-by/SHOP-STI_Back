@@ -35,11 +35,10 @@ public class StockController {
         return new ResponseEntity<>(this.stockService.getUnavailableStocks(), HttpStatus.OK);
     }
 
-
     @PostMapping
     public ResponseEntity<Stock> postStock(@RequestBody Stock stockSent) {
         try {
-            log.info("Creating stock ...");
+            log.info("Creating/updating stock ...");
             return stockSent.getId() == null ?
                     new ResponseEntity<>(this.stockService.updateStock(stockSent), HttpStatus.CREATED) :
                     new ResponseEntity<>(this.stockService.updateStock(stockSent), HttpStatus.ACCEPTED);
@@ -49,6 +48,23 @@ public class StockController {
         } catch (NotFoundException e) {
             log.error(e.getMessage());
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+    }
+
+    /**
+     * Retire un stock de son casier : lockerNumber et emplacement passent à null
+     */
+    @PatchMapping("/{id}/remove-from-locker")
+    public ResponseEntity<Stock> removeFromLocker(@PathVariable Long id) {
+        try {
+            log.info("Removing stock {} from locker ...", id);
+            return new ResponseEntity<>(this.stockService.removeFromLocker(id), HttpStatus.OK);
+        } catch (NotFoundException e) {
+            log.error(e.getMessage());
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        } catch (DBException e) {
+            log.error(e.getMessage());
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -85,5 +101,4 @@ public class StockController {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
     }
-
 }

@@ -37,33 +37,45 @@ public class StockService {
             existing = new Stock();
         }
 
+        if (stock.getProduct() != null)       existing.setProduct(stock.getProduct());
+        if (stock.getAvailable() != null)     existing.setAvailable(stock.getAvailable());
+        if (stock.getStatus() != null)        existing.setStatus(stock.getStatus());
+        if (stock.getCreationDate() != null)  existing.setCreationDate(stock.getCreationDate());
+        if (stock.getReference() != null)     existing.setReference(stock.getReference());
+        if (stock.getAlitracer() != null)     existing.setAlitracer(stock.getAlitracer());
 
-        if (stock.getProduct() != null) existing.setProduct(stock.getProduct());
+        // lockerNumber : on autorise explicitement la mise à null via un patch séparé
+        // ici on ne met à jour que si la valeur est fournie (non null)
+        if (stock.getLockerNumber() != null)  existing.setLockerNumber(stock.getLockerNumber());
 
-        if (stock.getAvailable() != null) existing.setAvailable(stock.getAvailable());
-
-        if (stock.getStatus() != null) existing.setStatus(stock.getStatus());
-
-        if (stock.getCreationDate() != null) existing.setCreationDate(stock.getCreationDate());
-
-        if (stock.getReference() != null) existing.setReference(stock.getReference());
-
-        if (stock.getAlitracer() != null) existing.setAlitracer(stock.getAlitracer());
-
-        if (stock.getLockerNumber() != null) existing.setLockerNumber(stock.getLockerNumber());
+        // emplacement : même logique, on met à jour si fourni
+        if (stock.getEmplacement() != null)   existing.setEmplacement(stock.getEmplacement());
 
         try {
-            Stock stockCreated = this.stockRepository.save(existing);
-            return stockCreated;
+            return this.stockRepository.save(existing);
         } catch (Exception e) {
             throw new DBException("Could not create stock");
+        }
+    }
+
+    /**
+     * Met à null le lockerNumber ET l'emplacement d'un stock (retrait physique du casier)
+     */
+    public Stock removeFromLocker(Long id) throws NotFoundException, DBException {
+        Stock existing = this.stockRepository.findById(id).orElse(null);
+        if (existing == null) throw new NotFoundException("Could not find stock with id : " + id);
+        existing.setLockerNumber(null);
+        existing.setEmplacement(null);
+        try {
+            return this.stockRepository.save(existing);
+        } catch (Exception e) {
+            throw new DBException("Could not update stock");
         }
     }
 
     public Stock deleteStock(Long id) throws NotFoundException, DBException {
         Stock existing = this.stockRepository.findById(id).orElse(null);
         if (existing == null) throw new NotFoundException("Could not find stock with id : " + id);
-
         try {
             this.stockRepository.delete(existing);
             return existing;
@@ -79,9 +91,7 @@ public class StockService {
     }
 
     public Integer getStockByProductId(Long productId) throws NotFoundException {
-        // search in every stock if the product id is the same as the one given and count the number of stocks found
         List<Stock> stocks = this.stockRepository.findByProductId(productId);
-        // if no stock is found, answer 0 stock, else count the number of stocks found
         return stocks.size();
     }
 }
