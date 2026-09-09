@@ -9,8 +9,8 @@ import java.util.List;
 @Repository
 public interface StockRepository extends JpaRepository<Stock, Long> {
 
-    List<Stock> findByAvailable(boolean b);
-    // findByProductId(Long id); -> to get all stocks for a product id given
-    List<Stock> findByProductId (Long id);
-}
+    List<Stock> findByAvailable(boolean available);
 
+    // tous les stocks pour un produit donné
+    List<Stock> findByProductId(Long id);
+}

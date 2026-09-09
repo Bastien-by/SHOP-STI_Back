@@ -33,18 +33,18 @@ public class CheckController {
     @PostMapping
     public ResponseEntity<Check> postCheck(@RequestBody Check checkSent) {
         try {
-            log.info("Creating check: {}", checkSent);
-
             if (checkSent.getStock() == null || checkSent.getStock().getId() == null) {
                 throw new NotFoundException("Stock not found");
             }
 
-            // Met à jour le statut du stock
-            Stock stock = checkSent.getStock();
-            stock.setStatus(checkSent.getStatus());
-            stockService.updateStock(stock);
+            // Charger le stock complet
+            Stock existingStock = stockService.getStock(checkSent.getStock().getId());
+            // Ne modifier que le statut
+            existingStock.setStatus(checkSent.getStatus());
+            stockService.updateStock(existingStock);
 
-            // Enregistre le check (checkType + pdfFilename inclus)
+            // Attacher le stock complet au check
+            checkSent.setStock(existingStock);
             Check savedCheck = this.checkService.updateCheck(checkSent);
 
             HttpStatus responseStatus = (checkSent.getId() == null)

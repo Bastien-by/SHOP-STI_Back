@@ -91,7 +91,7 @@ public class ExcelService {
                 row.createCell(0).setCellValue(checkRecord.getAlitracer());
                 row.createCell(1).setCellValue(checkRecord.getSize());
                 row.createCell(2).setCellValue(checkRecord.getCmu());
-                row.createCell(3).setCellValue(checkRecord.getLockerNumber());
+                row.createCell(3).setCellValue(checkRecord.getLocation());
                 row.createCell(4).setCellValue(getStatusLabel(checkRecord.getStatus()));
                 row.createCell(5).setCellValue(checkRecord.getComment());
                 row.createCell(6).setCellValue(checkRecord.getControlledBy());
@@ -133,7 +133,7 @@ public class ExcelService {
             Sheet sheet = workbook.createSheet("Contrôles");
 
             Row headerRow = sheet.createRow(0);
-            String[] headers = {"ID Alitracer", "Taille", "CMU", "Casier", "Statut", "Commentaire", "Contrôleur", "Date"};
+            String[] headers = {"ID Alitracer", "Taille", "CMU", "Emplacement", "Statut", "Commentaire", "Contrôleur", "Date"};
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);

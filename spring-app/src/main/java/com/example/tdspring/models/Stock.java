@@ -9,24 +9,29 @@ import lombok.Data;
 
 import java.util.Date;
 
-@Entity(name = "stock")
+@Entity
+@Table(name = "stock")
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
 @Setter
 @Data
 public class Stock {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // Produit lié
     @ManyToOne
     @JoinColumn(name = "id_product")
     private Product product;
 
+    // Disponible ou non
     private Boolean available;
 
-    private Integer status; // 0: NOK, 1: OK, 2: HS
+    // 0: NOK, 1: OK, 2: HS
+    private Integer status;
 
     private Date creationDate;
 
@@ -39,4 +44,9 @@ public class Stock {
 
     @Column(nullable = true)
     private String emplacement;
+
+    // Zone atelier
+    @ManyToOne
+    @JoinColumn(name = "zone_id")  // colonne zone_id dans la table stock
+    private Zone zone;
 }

@@ -31,6 +31,13 @@ public class SiemensPlcService {
 
     private static final MediaType JSON = MediaType.parse("application/json");
 
+    // Token JSON-RPC mis en cache et réutilisé entre les appels.
+    // Avant ce cache, chaque opération (readScan, clearScan, openLocker...)
+    // relogguait systématiquement auprès du web server du S7-1200, ce qui
+    // doublait le nombre de requêtes et surchargeait l'automate en polling.
+    private volatile String cachedToken;
+    private final Object tokenLock = new Object();
+
     public SiemensPlcService() {
         this.httpClient = createUnsafeOkHttpClient();
     }
@@ -66,12 +73,6 @@ public class SiemensPlcService {
     public boolean openLocker(int lockerId) {
         log.info("=== OPEN casier {} ===", lockerId);
         try {
-            String token = loginAndGetToken();
-            if (token == null) {
-                log.error("OpenLocker: login échoué");
-                return false;
-            }
-
             String openBody = "{"
                     + "\"jsonrpc\":\"2.0\","
                     + "\"method\":\"PlcProgram.Write\","
@@ -82,7 +83,7 @@ public class SiemensPlcService {
                     + "}"
                     + "}";
 
-            String response = callJsonRpc(openBody, token);
+            String response = executeAuthenticated(openBody);
             log.info("Open casier {} response = {}", lockerId, response);
             return response != null;
         } catch (Exception e) {
@@ -94,12 +95,6 @@ public class SiemensPlcService {
     public boolean closeLocker(int lockerId) {
         log.info("=== CLOSE casier {} ===", lockerId);
         try {
-            String token = loginAndGetToken();
-            if (token == null) {
-                log.error("CloseLocker: login échoué");
-                return false;
-            }
-
             String closeBody = "{"
                     + "\"jsonrpc\":\"2.0\","
                     + "\"method\":\"PlcProgram.Write\","
@@ -110,7 +105,7 @@ public class SiemensPlcService {
                     + "}"
                     + "}";
 
-            String response = callJsonRpc(closeBody, token);
+            String response = executeAuthenticated(closeBody);
             log.info("Close casier {} response = {}", lockerId, response);
             return response != null;
         } catch (Exception e) {
@@ -179,12 +174,6 @@ public class SiemensPlcService {
         }
 
         try {
-            String token = loginAndGetToken();
-            if (token == null) {
-                log.error("BatchLockerCommand: login échoué");
-                return succeeded;
-            }
-
             // ── Construction du body batch ────────────────────────────────
             // Chaque requête individuelle a un "id" = index + 1 pour pouvoir
             // retrouver le casier correspondant dans le tableau de réponses.
@@ -206,7 +195,7 @@ public class SiemensPlcService {
             log.info("Batch {} body = {}", open ? "OPEN" : "CLOSE", batchBody);
 
             // ── Envoi de la requête batch (un seul appel HTTP) ────────────
-            String response = callJsonRpc(batchBody.toString(), token);
+            String response = executeAuthenticated(batchBody.toString());
             log.info("Batch {} response = {}", open ? "OPEN" : "CLOSE", response);
 
             if (response == null) {
@@ -265,9 +254,6 @@ public class SiemensPlcService {
      */
     public String readScan() {
         try {
-            String token = loginAndGetToken();
-            if (token == null) return null;
-
             String readBody = "{"
                     + "\"jsonrpc\":\"2.0\","
                     + "\"method\":\"PlcProgram.Read\","
@@ -278,7 +264,7 @@ public class SiemensPlcService {
                     + "\"id\":1"
                     + "}";
 
-            String response = callJsonRpc(readBody, token);
+            String response = executeAuthenticated(readBody);
             log.info("ReadScan raw response = {}", response);
 
             if (response == null || response.contains("\"error\"")) {
@@ -302,9 +288,6 @@ public class SiemensPlcService {
     public boolean clearScan() {
         log.info("=== CLEAR \"Data\".Scan ===");
         try {
-            String token = loginAndGetToken();
-            if (token == null) return false;
-
             // Écrire un espace " " — le S7 accepte une string non-vide
             // decodeUntilCR ignorera un espace grâce au .trim() final
             String clearBody = "{"
@@ -317,7 +300,7 @@ public class SiemensPlcService {
                     + "}"
                     + "}";
 
-            String response = callJsonRpc(clearBody, token);
+            String response = executeAuthenticated(clearBody);
             log.info("ClearScan response = {}", response);
             return response != null && !response.contains("\"error\"");
 
@@ -337,12 +320,6 @@ public class SiemensPlcService {
     public boolean writeManageAll(boolean openAll) {
         log.info("=== WRITE Manage_All = {} ===", openAll);
         try {
-            String token = loginAndGetToken();
-            if (token == null) {
-                log.error("WriteManageAll: login échoué");
-                return false;
-            }
-
             String writeBody = "{"
                     + "\"jsonrpc\":\"2.0\","
                     + "\"method\":\"PlcProgram.Write\","
@@ -354,7 +331,7 @@ public class SiemensPlcService {
                     + "}";
 
             log.info("Payload Manage_All: {}", writeBody);
-            String response = callJsonRpc(writeBody, token);
+            String response = executeAuthenticated(writeBody);
             log.info("WriteManageAll response = {}", response);
 
             if (response != null && !response.contains("\"error\"")) {
@@ -377,12 +354,6 @@ public class SiemensPlcService {
     public boolean healthCheck() {
         log.info("=== HEALTH CHECK PLC ===");
         try {
-            String token = loginAndGetToken();
-            if (token == null) {
-                log.error("HealthCheck: login échoué");
-                return false;
-            }
-
             String readBody = "{"
                     + "\"jsonrpc\":\"2.0\","
                     + "\"method\":\"PlcProgram.Read\","
@@ -393,7 +364,7 @@ public class SiemensPlcService {
                     + "\"id\":1"
                     + "}";
 
-            String response = callJsonRpc(readBody, token);
+            String response = executeAuthenticated(readBody);
 
             if (response == null) {
                 log.error("HealthCheck: pas de réponse");
@@ -469,6 +440,58 @@ public class SiemensPlcService {
     /* =========================================================
      *  MÉTHODES PRIVÉES — COMMUNICATION PLC
      * ========================================================= */
+
+    /**
+     * Retourne le token en cache s'il existe, sinon se logue une seule fois.
+     * Plusieurs threads peuvent appeler ceci en parallèle (plusieurs postes
+     * qui scannent en même temps) : le login effectif est synchronisé pour
+     * n'ouvrir qu'une seule session auprès du PLC.
+     */
+    private String getToken() throws IOException {
+        String token = cachedToken;
+        if (token != null) {
+            return token;
+        }
+        synchronized (tokenLock) {
+            if (cachedToken == null) {
+                cachedToken = loginAndGetToken();
+            }
+            return cachedToken;
+        }
+    }
+
+    private void invalidateToken() {
+        synchronized (tokenLock) {
+            cachedToken = null;
+        }
+    }
+
+    /**
+     * Exécute une requête JSON-RPC en réutilisant le token en cache.
+     * Si le PLC répond par une erreur (session expirée par exemple), le
+     * token est invalidé et l'appel est retenté une seule fois avec un
+     * nouveau login, sans faire planter l'appelant.
+     */
+    private String executeAuthenticated(String jsonBody) throws IOException {
+        String token = getToken();
+        if (token == null) {
+            return null;
+        }
+
+        String response = callJsonRpc(jsonBody, token);
+
+        if (response == null || response.contains("\"error\"")) {
+            log.warn("Appel JSON-RPC en échec avec le token en cache, ré-authentification...");
+            invalidateToken();
+            token = getToken();
+            if (token == null) {
+                return null;
+            }
+            response = callJsonRpc(jsonBody, token);
+        }
+
+        return response;
+    }
 
     private String loginAndGetToken() throws IOException {
         String loginBody = "{"

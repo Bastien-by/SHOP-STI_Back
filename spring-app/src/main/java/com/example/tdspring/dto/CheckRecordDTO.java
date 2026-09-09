@@ -8,7 +8,8 @@ public class CheckRecordDTO {
     private String alitracer;
     private String size;
     private String cmu;
-    private int lockerNumber;
+    /** "Casier X" si l'outil est dans un casier, sinon le nom de la zone atelier (ex: "Maintenance"). */
+    private String location;
     private int status;
     private String comment;
     private String controlledBy;

@@ -3,17 +3,22 @@ package com.example.tdspring.services;
 import com.example.tdspring.exceptions.DBException;
 import com.example.tdspring.exceptions.NotFoundException;
 import com.example.tdspring.models.Stock;
+import com.example.tdspring.models.Zone;
 import com.example.tdspring.repositories.StockRepository;
+import com.example.tdspring.repositories.ZoneRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class StockService {
 
     private final StockRepository stockRepository;
+    private final ZoneRepository zoneRepository;
 
     public List<Stock> getAllStocks() {
         return this.stockRepository.findAll();
@@ -30,40 +35,57 @@ public class StockService {
     public Stock updateStock(Stock stock) throws DBException, NotFoundException {
         Stock existing;
 
+        // Création ou update selon présence d'un id
         if (stock.getId() != null) {
-            existing = this.stockRepository.findById(stock.getId()).orElse(null);
-            if (existing == null) throw new NotFoundException("Could not find stock with id : " + stock.getId());
+            existing = stockRepository.findById(stock.getId())
+                    .orElseThrow(() -> new NotFoundException("Could not find stock with id : " + stock.getId()));
         } else {
             existing = new Stock();
         }
 
-        if (stock.getProduct() != null)       existing.setProduct(stock.getProduct());
-        if (stock.getAvailable() != null)     existing.setAvailable(stock.getAvailable());
-        if (stock.getStatus() != null)        existing.setStatus(stock.getStatus());
-        if (stock.getCreationDate() != null)  existing.setCreationDate(stock.getCreationDate());
-        if (stock.getReference() != null)     existing.setReference(stock.getReference());
-        if (stock.getAlitracer() != null)     existing.setAlitracer(stock.getAlitracer());
+        // Champs simples : mise à jour seulement si non null dans la requête
+        if (stock.getProduct() != null)      existing.setProduct(stock.getProduct());
+        if (stock.getAlitracer() != null)    existing.setAlitracer(stock.getAlitracer());
+        if (stock.getReference() != null)    existing.setReference(stock.getReference());
+        if (stock.getAvailable() != null)    existing.setAvailable(stock.getAvailable());
+        if (stock.getStatus() != null)       existing.setStatus(stock.getStatus());
+        if (stock.getCreationDate() != null) existing.setCreationDate(stock.getCreationDate());
+        if (stock.getEmplacement() != null)  existing.setEmplacement(stock.getEmplacement());
+        if (stock.getLockerNumber() != null) existing.setLockerNumber(stock.getLockerNumber());
 
-        // lockerNumber : on autorise explicitement la mise à null via un patch séparé
-        // ici on ne met à jour que si la valeur est fournie (non null)
-        if (stock.getLockerNumber() != null)  existing.setLockerNumber(stock.getLockerNumber());
-
-        // emplacement : même logique, on met à jour si fourni
-        if (stock.getEmplacement() != null)   existing.setEmplacement(stock.getEmplacement());
+        // Zone : on la gère TOUJOURS explicitement
+        if (stock.getZone() == null) {
+            // le client a envoyé "zone": null -> on enlève la zone
+            existing.setZone(null);
+            log.debug("Stock {} : zone mise à null", existing.getId());
+        } else if (stock.getZone().getId() != null) {
+            // le client a envoyé "zone": { "id": X }
+            Long zoneId = stock.getZone().getId();
+            Zone z = zoneRepository.findById(zoneId)
+                    .orElseThrow(() -> new NotFoundException("Zone not found: " + zoneId));
+            existing.setZone(z);
+            log.debug("Stock {} : zone mise à {}", existing.getId(), zoneId);
+        } else {
+            // zone envoyée sans id -> on la considère comme null
+            existing.setZone(null);
+            log.debug("Stock {} : zone sans id -> null", existing.getId());
+        }
 
         try {
-            return this.stockRepository.save(existing);
+            Stock saved = stockRepository.save(existing);
+            log.info("Saved stock {}, zone_id={}", saved.getId(),
+                    saved.getZone() != null ? saved.getZone().getId() : null);
+            return saved;
         } catch (Exception e) {
             throw new DBException("Could not create stock");
         }
     }
 
-    /**
-     * Met à null le lockerNumber ET l'emplacement d'un stock (retrait physique du casier)
-     */
     public Stock removeFromLocker(Long id) throws NotFoundException, DBException {
         Stock existing = this.stockRepository.findById(id).orElse(null);
-        if (existing == null) throw new NotFoundException("Could not find stock with id : " + id);
+        if (existing == null) {
+            throw new NotFoundException("Could not find stock with id : " + id);
+        }
         existing.setLockerNumber(null);
         existing.setEmplacement(null);
         try {
@@ -75,7 +97,9 @@ public class StockService {
 
     public Stock deleteStock(Long id) throws NotFoundException, DBException {
         Stock existing = this.stockRepository.findById(id).orElse(null);
-        if (existing == null) throw new NotFoundException("Could not find stock with id : " + id);
+        if (existing == null) {
+            throw new NotFoundException("Could not find stock with id : " + id);
+        }
         try {
             this.stockRepository.delete(existing);
             return existing;
@@ -86,7 +110,9 @@ public class StockService {
 
     public Stock getStock(Long id) throws NotFoundException {
         Stock existing = this.stockRepository.findById(id).orElse(null);
-        if (existing == null) throw new NotFoundException("Could not find stock with id : " + id);
+        if (existing == null) {
+            throw new NotFoundException("Could not find stock with id : " + id);
+        }
         return existing;
     }
 
